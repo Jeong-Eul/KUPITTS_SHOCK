@@ -171,10 +171,8 @@ if __name__ == '__main__':
                 X_value, label = X_value.to(device), label.to(device)
 
                 pred = fluid_model(X_value)
-                pred =  pred.type(torch.LongTensor).to(device)
-                
                 # backward pass
-                loss = entropy(pred.to(device), pred)
+                loss = entropy(pred.to(device), label.to(torch.long))
                 loss.backward()
                 optimizer.step()
                 
@@ -189,10 +187,10 @@ if __name__ == '__main__':
                 running_loss = 0
                 for num_iter, batch_data in enumerate(tqdm(loader_val)):
                     X_value, label = batch_data
-                    X_value, label = X_value.to(device), label.type(torch.LongTensor).to(device)
+                    X_value, label = X_value.to(device), label.to(device)
                     
                     pred = fluid_model(X_value)
-                    loss = entropy(pred.to(device), label)                
+                    loss = entropy(pred.to(device), label.to(torch.long))                
                     running_loss += loss.item()
                     
             avg_valid_loss = np.round(running_loss / len(loader_val),4) 
