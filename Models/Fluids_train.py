@@ -8,7 +8,7 @@ import random
 import wandb
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import precision_score, recall_score ,f1_score, confusion_matrix, roc_auc_score
+from sklearn.metrics import precision_score, recall_score ,f1_score, confusion_matrix, roc_auc_score, accuracy_score, classification_report
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -259,12 +259,16 @@ if __name__ == '__main__':
         loader_val_out = DataLoader(mimic_valid, batch_size=args.batch_size, shuffle=False, drop_last=False)
         
         fluid_model = Fluids_model.MLP(input_size =mimic_train.X.shape[1], drop_rate = args.ff_dropout, hidden_unit_sizes=hidden_layers).to(device)
-        
+        print(fluid_model)
         checkpoint = torch.load(f'{args.ckpt_dir}/Fluids_model_checkpoint.pth')
         fluid_model.load_state_dict(checkpoint)
         
         print('Start Getting the Valid Prediction value')
         fluid_model.eval()
+        all_labels = []
+        all_predictions = []
+        all_probabilities = []
+
         with torch.no_grad():
             for idx, batch_data in enumerate(tqdm(loader_val_out)):
                 X_value, label = batch_data
@@ -273,17 +277,41 @@ if __name__ == '__main__':
                 
                 probabilities = F.softmax(pred, dim=1)
                 predicted_classes = torch.argmax(probabilities, dim=1)
+                
+                all_labels.extend(label.cpu().numpy())
+                all_predictions.extend(predicted_classes.cpu().numpy())
+                all_probabilities.extend(probabilities.cpu().numpy())
+                
                 predicted_classes = predicted_classes.unsqueeze(1)
                 
-             
                 if not idx:
                     pred_arrays = predicted_classes.detach().cpu().numpy()
-                    
-            
+                    prob_arrays = probabilities.detach().cpu().numpy()
                 else:
-                    pred_arrays = np.vstack((pred_arrays,predicted_classes.detach().cpu().numpy()))
-                    
+                    pred_arrays = np.vstack((pred_arrays, predicted_classes.detach().cpu().numpy()))
+                    prob_arrays = np.vstack((prob_arrays, probabilities.detach().cpu().numpy()))
+                
+            # 예측 결과와 확률 값 저장
+            os.makedirs(args.result_dir, exist_ok=True)
+            np.save(f'{args.result_dir}/inference_valid.npy', pred_arrays)
+            np.save(f'{args.result_dir}/inference_valid_probabilities.npy', prob_arrays)
+            print('Inference finished')
             
-            np.save(f'{args.result_dir}/inference_valid.npy',pred_arrays)
-            print('Inference finished')       
+
+        accuracy = accuracy_score(all_labels, all_predictions)
+        precision = precision_score(all_labels, all_predictions, average='weighted')
+        recall = recall_score(all_labels, all_predictions, average='weighted')
+        f1 = f1_score(all_labels, all_predictions, average='weighted')
+        conf_matrix = confusion_matrix(all_labels, all_predictions)
+        class_report = classification_report(all_labels, all_predictions)
+
+        print(f'Accuracy: {accuracy:.4f}')
+        print(f'Precision: {precision:.4f}')
+        print(f'Recall: {recall:.4f}')
+        print(f'F1-score: {f1:.4f}')
+        print('Confusion Matrix:')
+        print(conf_matrix)
+        print('Classification Report:')
+        print(class_report)
+                    
                 
